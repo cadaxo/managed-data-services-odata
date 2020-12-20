@@ -22,6 +22,14 @@
      <IS_SAP_SERVICE>-</IS_SAP_SERVICE>
     </_-IWBEP_-I_MGW_SRH>
    </_-IWBEP_-I_MGW_SRH>
+   <_-IWBEP_-I_MGW_SRT>
+    <_-IWBEP_-I_MGW_SRT>
+     <TECHNICAL_NAME>/CADAXO/MDS_SRV</TECHNICAL_NAME>
+     <VERSION>0001</VERSION>
+     <LANGUAGE>E</LANGUAGE>
+     <DESCRIPTION>yxc</DESCRIPTION>
+    </_-IWBEP_-I_MGW_SRT>
+   </_-IWBEP_-I_MGW_SRT>
   </asx:values>
  </asx:abap>
 </abapGit>

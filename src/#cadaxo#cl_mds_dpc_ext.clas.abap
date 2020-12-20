@@ -35,16 +35,21 @@ CLASS /cadaxo/cl_mds_dpc_ext DEFINITION
     METHODS legendcusts_get_entityset
          REDEFINITION .
   PRIVATE SECTION.
+    TYPES: BEGIN OF ty_whereused_filter,
+             objectname TYPE string,
+             fieldname  TYPE string,
+           END OF ty_whereused_filter.
+    CONSTANTS backend_odata_verison TYPE string VALUE 'Backend: Odata 0.9-7b2c6eb API 0.9-b75b892'.
     CLASS-DATA: api TYPE REF TO /cadaxo/if_mds_api.
     METHODS parse_fieldname_filter IMPORTING io_tech_request_context   TYPE REF TO /iwbep/if_mgw_req_entityset
-                                   RETURNING VALUE(r_filter_fieldname) TYPE string
+                                   RETURNING VALUE(r_whereused_filter) TYPE ty_whereused_filter
                                    RAISING   /iwbep/cx_mgw_busi_exception
                                              /iwbep/cx_mgw_tech_exception.
 ENDCLASS.
 
 
 
-CLASS /CADAXO/CL_MDS_DPC_EXT IMPLEMENTATION.
+CLASS /cadaxo/cl_mds_dpc_ext IMPLEMENTATION.
 
 
   METHOD annotations_get_entity.
@@ -140,7 +145,7 @@ CLASS /CADAXO/CL_MDS_DPC_EXT IMPLEMENTATION.
     er_entity = CORRESPONDING #( nodes[ 1 ] MAPPING object_name = name object_type = type ).
     er_entity-link = nodeapi->get_action_links(  ).
 
-    er_entity-managed-version = 'Backend: Odata 0.9-7b2c6eb API 0.9-b75b892'.
+    er_entity-managed-version = backend_odata_verison.
   ENDMETHOD.
 
 
@@ -160,28 +165,32 @@ CLASS /CADAXO/CL_MDS_DPC_EXT IMPLEMENTATION.
     IF object_semantic_key IS NOT INITIAL.
 
       TRY.
-          DATA(dss) = api->get_datasources_by_semkey( i_ds_semkey        = object_semantic_key
-                                                      i_fieldname_filter = CONV #( search_4_field ) ).
+          DATA(dss) = api->get_datasources_by_semkey( i_ds_semkey         = object_semantic_key
+                                                      i_filter_datasource = CONV #( search_4_field-objectname )
+                                                      i_filter_fieldname  = CONV #( search_4_field-fieldname ) ).
 
-      CATCH /cadaxo/cx_mds_id INTO DATA(exception).
-        RAISE EXCEPTION TYPE  /iwbep/cx_mgw_busi_exception EXPORTING textid = exception->if_t100_message~t100key.
+        CATCH /cadaxo/cx_mds_id INTO DATA(exception).
+          RAISE EXCEPTION TYPE /iwbep/cx_mgw_busi_exception EXPORTING textid = exception->if_t100_message~t100key.
       ENDTRY.
       LOOP AT dss ASSIGNING FIELD-SYMBOL(<ds>).
 
-        APPEND CORRESPONDING #( <ds>-api->get_datasource( ) MAPPING object_name = name object_type = type ) TO et_entityset ASSIGNING FIELD-SYMBOL(<entity>).
+        data(datasource) = <ds>-api->get_datasource( ).
+        APPEND CORRESPONDING #( datasource MAPPING object_name = name object_type = type ) TO et_entityset ASSIGNING FIELD-SYMBOL(<entity>).
 
         <entity>-link = CORRESPONDING #( <ds>-api->get_action_links( ) ).
-        <entity>-field_search = <ds>-field_search.
+        <entity>-field_search = datasource-field_search.
 
         <entity>-object_state = SWITCH #( <ds>-role WHEN /cadaxo/if_mds_api=>ds_role-main THEN 100
                                                     WHEN /cadaxo/if_mds_api=>ds_role-parent THEN 110
                                                     WHEN /cadaxo/if_mds_api=>ds_role-child THEN 120 ).
-        IF search_4_field IS NOT INITIAL AND <ds>-field_search IS INITIAL.
+        IF search_4_field IS NOT INITIAL AND <entity>-field_search IS INITIAL.
           <entity>-object_state = <entity>-object_state + 100.
         ENDIF.
 
-        <entity>-managed-version = 'Backend: Odata 0.9-7b2c6eb API 0.9-b75b892'.
+        <entity>-managed-version = backend_odata_verison.
       ENDLOOP.
+
+     " delete et_entityset where object_state >= 200.
 
     ELSE.
 
@@ -283,7 +292,7 @@ CLASS /CADAXO/CL_MDS_DPC_EXT IMPLEMENTATION.
 
     IF getall = abap_true.
 
-      DATA(datasources) = api->get_datasources_by_id( i_ds_id      = links[ 1 ]-object_id1 ).
+      DATA(datasources) = api->get_datasources_by_id( links[ 1 ]-object_id1 ).
 
       DATA: alllinks LIKE links.
       DATA: rg_used_ds TYPE RANGE OF /cadaxo/mds_ds_id.
@@ -373,16 +382,21 @@ CLASS /CADAXO/CL_MDS_DPC_EXT IMPLEMENTATION.
 
     wrong_filter = abap_false.
 
-    supported_filter_string = |Only the following filterstring is supported: FieldSearch/SearchFieldName eq '<Fieldname>'|.
+    supported_filter_string = |Only the following filterstring is supported: FieldSearch/SearchObjectName eq '<Datasourcename>' and FieldSearch/SearchFieldName eq '<Fieldname>'|.
 
     filter_select_options = io_tech_request_context->get_filter( )->get_filter_select_options( ).
 
     IF filter_select_options IS NOT INITIAL.
 
       TRY.
-          r_filter_fieldname = filter_select_options[ property = 'FIELD_SEARCH-SEARCH_FIELD_NAME' ]-select_options[ sign = 'I' option = 'EQ'  ]-low.
+          r_whereused_filter-fieldname = filter_select_options[ property = 'FIELD_SEARCH-SEARCH_FIELD_NAME' ]-select_options[ sign = 'I' option = 'EQ'  ]-low.
         CATCH cx_sy_itab_line_not_found.
           wrong_filter = abap_true.
+      ENDTRY.
+
+      TRY.
+          r_whereused_filter-objectname = filter_select_options[ property = 'FIELD_SEARCH-SEARCH_OBJECT_NAME' ]-select_options[ sign = 'I' option = 'EQ'  ]-low.
+        CATCH cx_sy_itab_line_not_found.
       ENDTRY.
 
     ELSE.
@@ -420,7 +434,7 @@ CLASS /CADAXO/CL_MDS_DPC_EXT IMPLEMENTATION.
                 DATA(param1) = function_parameters[ 1 ].
                 IF param1->kind = filter_node_kind-literal.
                   literal ?= param1.
-                  r_filter_fieldname = literal->literal_converted.
+                  r_whereused_filter-fieldname = literal->literal_converted.
                 ELSE.
                   wrong_filter = abap_true.
                 ENDIF.
@@ -533,7 +547,7 @@ CLASS /CADAXO/CL_MDS_DPC_EXT IMPLEMENTATION.
 *              ENDIF.
             ELSEIF right_node->kind = filter_node_kind-literal.
               literal ?= right_node.
-              r_filter_fieldname = literal->literal_converted.
+              r_whereused_filter-fieldname = literal->literal_converted.
             ELSE.
               wrong_filter = abap_true.
             ENDIF.

@@ -87,6 +87,14 @@
      <SOFT_STATE_STAT>N</SOFT_STATE_STAT>
     </_-IWFND_-I_MED_SRH>
    </_-IWFND_-I_MED_SRH>
+   <_-IWFND_-I_MED_SRT>
+    <_-IWFND_-I_MED_SRT>
+     <SRV_IDENTIFIER>/CADAXO/MDS_SRV_0001</SRV_IDENTIFIER>
+     <IS_ACTIVE>A</IS_ACTIVE>
+     <LANGUAGE>E</LANGUAGE>
+     <DESCRIPTION>yxc</DESCRIPTION>
+    </_-IWFND_-I_MED_SRT>
+   </_-IWFND_-I_MED_SRT>
   </asx:values>
  </asx:abap>
 </abapGit>
